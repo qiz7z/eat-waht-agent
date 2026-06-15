@@ -13,16 +13,3 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-  gradio:
-    build: .
-    command: ["python", "app.py"]
-    ports:
-      - "7860:7860"
-    env_file:
-      - .env
-    volumes:
-      - ./logs:/app/logs
-    restart: unless-stopped
-    profiles:
-      - gradio

@@ -1,4 +1,4 @@
-.PHONY: install test lint run-api run-gradio docker-build docker-up eval clean help
+.PHONY: install test lint run-api run-frontend docker-build docker-up eval clean help
 
 help:  ## 显示帮助
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -14,14 +14,13 @@ test-cov:  ## 运行测试并生成覆盖率报告
 
 lint:  ## 检查代码风格（可选）
 	python -m py_compile api.py
-	python -m py_compile app.py
 	python -c "from agent.agent import MealRecommenderAgent; print('import ok')"
 
 run-api:  ## 启动 FastAPI 服务
 	python api.py
 
-run-gradio:  ## 启动 Gradio 界面
-	python app.py
+run-frontend:  ## 启动 Vue 前端
+	cd frontend && npm run dev
 
 eval:  ## 运行 Agent 行为评测
 	python evals/agent_eval.py
@@ -29,11 +28,8 @@ eval:  ## 运行 Agent 行为评测
 docker-build:  ## 构建 Docker 镜像
 	docker build -t eat-what-agent .
 
-docker-up:  ## 启动 Docker 服务（仅 API）
+docker-up:  ## 启动 Docker 服务
 	docker compose up -d
-
-docker-up-all:  ## 启动 Docker 服务（含 Gradio）
-	docker compose --profile gradio up -d
 
 docker-down:  ## 停止 Docker 服务
 	docker compose down

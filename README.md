@@ -15,7 +15,7 @@
 - **运行日志**：记录 Agent 调用、工具调用和异常信息
 - **行为评测**：提供轻量 eval 脚本验证关键 Agent 行为
 - **Docker 部署**：提供 Dockerfile 和 docker-compose 一键部署
-- **Web 界面**：提供 Gradio UI 和独立前端页面
+- **Web 界面**：提供 Vue 3 + TypeScript 前端，支持多轮对话交互
 - **本地运行**：支持本地部署，保护隐私
 
 ## Agent 架构设计
@@ -25,10 +25,10 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         用户层 (User Layer)                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │  Gradio UI   │  │  静态前端     │  │  第三方调用 / cURL   │  │
-│  │  (app.py)    │  │  (index.html)│  │                      │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘  │
+│  ┌──────────────┐  ┌──────────────────────────────────────────┐  │
+│  │ Vue 3 前端   │  │  第三方调用 / cURL                       │  │
+│  │ (frontend/)  │  │                                          │  │
+│  └──────┬───────┘  └─────────────────────┬────────────────────┘  │
 └─────────┼─────────────────┼─────────────────────┼───────────────┘
           │                 │                     │
           ▼                 ▼                     ▼
@@ -161,8 +161,8 @@
 │       ▼                   ▼                   ▼                 │
 │  ⑦ 服务化             ⑧ 前端交互          ⑨ 观测日志           │
 │  ┌──────────┐       ┌──────────┐       ┌──────────┐            │
-│  │ FastAPI  │──────▶│ Gradio   │──────▶│ 结构化   │            │
-│  │ REST API │       │ 静态页面 │       │ 日志记录 │            │
+│  │ FastAPI  │──────▶│ Vue 3    │──────▶│ 结构化   │            │
+│  │ REST API │       │ TypeScript│      │ 日志记录 │            │
 │  │ 会话管理 │       │ 聊天交互 │       │ 链路追踪 │            │
 │  └──────────┘       └──────────┘       └──────────┘            │
 │       │                   │                   │                 │
@@ -188,7 +188,7 @@
 | ⑤ 状态管理 | 会话隔离、ContextVar | `agent/tools.py` |
 | ⑥ Agent 编排 | LangChain Agent、Tool Calling | `agent/agent.py` |
 | ⑦ 服务化 | REST API、会话管理、TTL | `api.py` |
-| ⑧ 前端交互 | Gradio UI、静态页面 | `app.py`, `static/` |
+| ⑧ 前端交互 | Vue 3 + TypeScript 前端 | `frontend/` |
 | ⑨ 观测日志 | 结构化日志、调用链路 | `agent/logging_config.py` |
 | ⑩ 测试保障 | 单元测试、边界覆盖 | `tests/` |
 | ⑪ 行为评测 | 场景评测、行为验证 | `evals/agent_eval.py` |
@@ -261,15 +261,17 @@ curl -X POST http://localhost:8000/reset \
   -d "{\"session_id\":\"你的 session_id\"}"
 ```
 
-### 4. 启动 Gradio 界面（可选）
+### 4. 启动 Vue 前端（可选）
 
 ```bash
-python app.py
-# 或
-make run-gradio
+cd frontend
+npm install
+npm run dev
 ```
 
-然后在浏览器中访问：`http://localhost:7860`
+然后在浏览器中访问：`http://localhost:3000`
+
+前端通过 Vite 代理自动转发 `/api/*` 请求到 FastAPI 后端。
 
 ### 5. Docker 部署（可选）
 
@@ -277,8 +279,8 @@ make run-gradio
 # 仅启动 API 服务
 docker compose up -d
 
-# 同时启动 API + Gradio
-docker compose --profile gradio up -d
+# 同时启动 API + 前端
+docker compose up -d
 ```
 
 ## 使用指南
@@ -304,7 +306,6 @@ Agent：为你生成推荐...
 
 ```
 eat-what-agent/
-├── app.py                # Gradio Web UI 入口
 ├── api.py                # FastAPI 标准接口入口（含会话 TTL 管理）
 ├── agent/                # Agent 核心模块
 │   ├── __init__.py
@@ -317,8 +318,15 @@ eat-what-agent/
 │   ├── recommendation.py # 推荐引擎
 │   ├── controller.py     # Agent 控制器
 │   └── tools.py          # LangChain 工具定义
-├── static/               # 独立前端页面
-│   └── index.html
+├── frontend/             # Vue 3 + TypeScript 前端
+│   ├── src/
+│   │   ├── App.vue       # 主界面
+│   │   ├── api.ts        # API 客户端
+│   │   └── components/
+│   │       ├── ChatMessage.vue     # 聊天气泡组件
+│   │       └── TypingIndicator.vue # 打字指示器
+│   ├── vite.config.ts    # Vite 代理配置
+│   └── package.json
 ├── tests/                # 单元测试
 │   ├── test_agent.py
 │   ├── test_api.py       # FastAPI 接口测试
@@ -343,7 +351,8 @@ eat-what-agent/
 - **Python 3.11+**
 - **LangChain** - 大语言模型框架
 - **FastAPI** - 标准 API 服务
-- **Gradio** - Web UI 框架
+- **Vue 3 + TypeScript** - 前端框架
+- **Vite** - 前端构建工具
 - **Pydantic** - 数据验证
 - **Docker** - 容器化部署
 
@@ -357,7 +366,7 @@ make install       # 安装依赖
 make test          # 运行测试
 make test-cov      # 运行测试 + 覆盖率
 make run-api       # 启动 API 服务
-make run-gradio    # 启动 Gradio 界面
+make run-frontend  # 启动 Vue 前端
 make eval          # 运行评测
 make docker-build  # 构建镜像
 make docker-up     # 启动容器
@@ -419,7 +428,7 @@ LOG_FILE=agent.log
 2. **工具设计**：`agent/tools.py` 提供上下文、偏好、推荐和重置工具
 3. **状态管理**：`SessionStateManager` 隔离多用户会话状态
 4. **模型配置**：`agent/config.py` 统一管理 OpenAI-compatible 模型接入
-5. **交互入口**：`app.py` 提供 Gradio UI，`api.py` 提供标准 API
+5. **交互入口**：`frontend/` 提供 Vue 3 聊天界面，`api.py` 提供标准 API
 6. **观测能力**：`agent/logging_config.py` 记录运行链路与异常
 7. **质量保障**：`tests/` 提供单元测试，`evals/` 提供 Agent 行为评测
 8. **降级策略**：无 API Key 或模型失败时返回本地推荐兜底

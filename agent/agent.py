@@ -8,7 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 from .config import build_chat_openai_kwargs, get_llm_config
 from .logging_config import get_logger
-from .tools import get_all_tools, SessionStateManager, _current_agent_id
+from .tools import get_all_tools, SessionStateManager
 
 
 logger = get_logger(__name__)
@@ -102,20 +102,35 @@ class MealRecommenderAgent:
             self._session.activate()
         
         try:
+            # create_agent (langchain >=1.3) 要求 messages 为字典格式: {"role": "...", "content": "..."}
+            input_messages = []
+            for msg in self._chat_history:
+                if msg.type == "human":
+                    input_messages.append({"role": "user", "content": msg.content})
+                elif msg.type == "ai":
+                    input_messages.append({"role": "assistant", "content": msg.content})
+            input_messages.append({"role": "user", "content": user_message})
+
             result = self._graph.invoke({
-                "messages": self._chat_history + [HumanMessage(content=user_message)],
+                "messages": input_messages,
             })
             
             messages = result.get("messages", [])
             response = ""
             for msg in reversed(messages):
-                if msg.type == "ai" and msg.content:
-                    response = msg.content
+                if isinstance(msg, dict):
+                    is_ai = msg.get("role") == "assistant" or msg.get("type") == "ai"
+                    content = msg.get("content", "")
+                else:
+                    is_ai = getattr(msg, "type", "") == "ai"
+                    content = getattr(msg, "content", "")
+                if is_ai and content:
+                    response = content
                     break
             
             if not response:
                 response = "抱歉，我暂时无法回复。"
-            
+
             # 更新对话历史（追加前检查容量，保持 human/ai 对匹配）
             if len(self._chat_history) >= MAX_CHAT_HISTORY:
                 self._chat_history = self._chat_history[-(MAX_CHAT_HISTORY - 2):]

@@ -13,7 +13,7 @@ COPY . .
 RUN mkdir -p logs
 
 # 暴露端口
-EXPOSE 8000 7860
+EXPOSE 8000
 
 # 默认启动 FastAPI
 CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
