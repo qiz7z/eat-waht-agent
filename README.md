@@ -9,10 +9,12 @@
 - **全维度推荐**：综合考虑口味、预算、天气、心情、健康、社交场景等因素
 - **追问式策略**：1 个主要推荐 + 2 个备选方案，不满意可以再选
 - **会话隔离**：每个用户会话拥有独立偏好状态，避免串话
+- **会话生命周期管理**：支持 TTL 自动过期和最大会话数限制
 - **统一模型配置**：集中管理 `api_key`、`model`、`base_url`、温度和超时
 - **标准 API**：提供 FastAPI `/chat`、`/reset`、`/health` 接口
 - **运行日志**：记录 Agent 调用、工具调用和异常信息
 - **行为评测**：提供轻量 eval 脚本验证关键 Agent 行为
+- **Docker 部署**：提供 Dockerfile 和 docker-compose 一键部署
 - **Web 界面**：提供 Gradio UI 和独立前端页面
 - **本地运行**：支持本地部署，保护隐私
 
@@ -56,18 +58,12 @@ LLM_TIMEOUT=15
 
 配置优先级：显式传参 > `LLM_*` > `OPENAI_*` > `DASHSCOPE_*` > 默认值。
 
-### 3. 启动 Gradio 应用
-
-```bash
-python app.py
-```
-
-然后在浏览器中访问：`http://localhost:7860`
-
-### 4. 启动标准 API 服务
+### 3. 启动 FastAPI 服务
 
 ```bash
 python api.py
+# 或
+make run-api
 ```
 
 API 地址：`http://localhost:8000`
@@ -87,6 +83,26 @@ curl -X POST http://localhost:8000/chat \
 curl -X POST http://localhost:8000/reset \
   -H "Content-Type: application/json" \
   -d "{\"session_id\":\"你的 session_id\"}"
+```
+
+### 4. 启动 Gradio 界面（可选）
+
+```bash
+python app.py
+# 或
+make run-gradio
+```
+
+然后在浏览器中访问：`http://localhost:7860`
+
+### 5. Docker 部署（可选）
+
+```bash
+# 仅启动 API 服务
+docker compose up -d
+
+# 同时启动 API + Gradio
+docker compose --profile gradio up -d
 ```
 
 ## 使用指南
@@ -113,21 +129,34 @@ Agent：为你生成推荐...
 ```
 eat-what-agent/
 ├── app.py                # Gradio Web UI 入口
-├── api.py                # FastAPI 标准接口入口
+├── api.py                # FastAPI 标准接口入口（含会话 TTL 管理）
 ├── agent/                # Agent 核心模块
 │   ├── __init__.py
+│   ├── agent.py          # LangChain Tool Calling Agent 主类
 │   ├── config.py         # 大模型统一配置
 │   ├── logging_config.py # 日志配置
 │   ├── models.py         # 数据模型
 │   ├── context.py        # 上下文服务（时间、天气）
 │   ├── preference.py     # 偏好收集器
 │   ├── recommendation.py # 推荐引擎
-│   └── controller.py     # Agent 控制器
+│   ├── controller.py     # Agent 控制器
+│   └── tools.py          # LangChain 工具定义
 ├── static/               # 独立前端页面
 │   └── index.html
 ├── tests/                # 单元测试
+│   ├── test_agent.py
+│   ├── test_api.py       # FastAPI 接口测试
+│   ├── test_config.py
+│   ├── test_context.py
+│   ├── test_controller.py
+│   ├── test_models.py
+│   ├── test_preference.py
+│   └── test_tools.py
 ├── evals/                # Agent 行为评测
 │   └── agent_eval.py
+├── Dockerfile            # Docker 镜像定义
+├── docker-compose.yml    # Docker Compose 编排
+├── Makefile              # 常用开发命令
 ├── requirements.txt      # Python 依赖
 ├── .env.example          # 环境变量模板
 └── README.md             # 项目说明
@@ -137,21 +166,41 @@ eat-what-agent/
 
 - **Python 3.11+**
 - **LangChain** - 大语言模型框架
+- **FastAPI** - 标准 API 服务
 - **Gradio** - Web UI 框架
 - **Pydantic** - 数据验证
+- **Docker** - 容器化部署
 
 ## 开发
+
+### 常用命令（Make）
+
+```bash
+make help          # 查看所有命令
+make install       # 安装依赖
+make test          # 运行测试
+make test-cov      # 运行测试 + 覆盖率
+make run-api       # 启动 API 服务
+make run-gradio    # 启动 Gradio 界面
+make eval          # 运行评测
+make docker-build  # 构建镜像
+make docker-up     # 启动容器
+```
 
 ### 运行测试
 
 ```bash
 pytest tests/ -v
+# 或
+make test
 ```
 
 ### 运行 Agent 行为评测
 
 ```bash
 python evals/agent_eval.py
+# 或
+make eval
 ```
 
 ### 查看日志
@@ -169,6 +218,22 @@ LOG_LEVEL=INFO
 LOG_DIR=logs
 LOG_FILE=agent.log
 ```
+
+### 环境变量参考
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `LLM_API_KEY` | 大模型 API Key | - |
+| `LLM_MODEL` | 模型名称 | `gpt-4o-mini` |
+| `LLM_BASE_URL` | API Base URL | - |
+| `LLM_TEMPERATURE` | 温度 | `0.7` |
+| `LLM_TIMEOUT` | 超时（秒） | `15` |
+| `SESSION_TTL_SECONDS` | 会话过期时间（秒） | `3600` |
+| `MAX_SESSIONS` | 最大同时活跃会话数 | `200` |
+| `CORS_ALLOW_ORIGINS` | CORS 允许的来源，逗号分隔 | `*` |
+| `LOG_LEVEL` | 日志级别 | `INFO` |
+| `LOG_DIR` | 日志目录 | `logs` |
+| `LOG_FILE` | 日志文件名 | `agent.log` |
 
 ## Agent 开发流程覆盖
 
