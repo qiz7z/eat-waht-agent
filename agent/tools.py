@@ -7,6 +7,11 @@ import uuid
 import threading
 from langchain_core.tools import tool
 
+from .logging_config import get_logger
+
+
+logger = get_logger(__name__)
+
 
 # 当前活动的 agent ID（通过 contextvars 实现协程/线程安全隔离）
 _current_agent_id: ContextVar[str | None] = ContextVar("agent_id", default=None)
@@ -59,6 +64,7 @@ def _save_preference(key: str, value: str) -> str:
     state = _get_state()
     state[key] = value
     _save_internal_state(agent_id, state)
+    logger.info("tool_save_preference agent_id=%s key=%s value=%s", agent_id, key, value)
     
     return f"已记录：{key} = {value}"
 
@@ -208,6 +214,7 @@ def _generate_recommendation(force_recommendation: str = "") -> str:
     if agent_id:
         state["has_recommendation"] = True
         _save_internal_state(agent_id, state)
+        logger.info("tool_generate_recommendation agent_id=%s taste=%s budget=%s", agent_id, taste, budget)
     
     return "\n".join(lines)
 

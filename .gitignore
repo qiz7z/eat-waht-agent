@@ -103,6 +103,7 @@
 
 # Logs
 *.log
+logs/
 **/logs/
 
 # Environment and secrets

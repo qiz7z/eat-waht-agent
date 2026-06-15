@@ -7,7 +7,11 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 
 from .config import build_chat_openai_kwargs, get_llm_config
+from .logging_config import get_logger
 from .tools import get_all_tools, SessionStateManager, _current_agent_id
+
+
+logger = get_logger(__name__)
 
 
 SYSTEM_PROMPT = """你是一个专门为中国大学生推荐餐饮的 AI 助手。
@@ -58,11 +62,18 @@ class MealRecommenderAgent:
         """初始化 Agent"""
         if not self._llm_config.is_configured:
             self._is_ready = False
+            logger.warning("agent_not_ready reason=missing_api_key model=%s", self._llm_config.model)
             return
         
         # 为每个 agent 创建独立的 session state
         self._session = SessionStateManager()
         
+        logger.info(
+            "initializing_agent model=%s base_url=%s provider=%s",
+            self._llm_config.model,
+            self._llm_config.base_url or "default",
+            self._llm_config.provider,
+        )
         llm = ChatOpenAI(**build_chat_openai_kwargs(self._llm_config))
         
         tools = get_all_tools()
@@ -82,6 +93,7 @@ class MealRecommenderAgent:
     
     def invoke(self, user_message: str) -> str:
         """调用 Agent 处理用户消息"""
+        logger.info("agent_invoke ready=%s message=%s", self._is_ready, user_message)
         if not self._is_ready:
             return self._get_fallback_response(user_message)
         
@@ -109,10 +121,12 @@ class MealRecommenderAgent:
                 self._chat_history = self._chat_history[-(MAX_CHAT_HISTORY - 2):]
             self._chat_history.append(HumanMessage(content=user_message))
             self._chat_history.append(AIMessage(content=response))
+            logger.info("agent_response response_len=%s history_len=%s", len(response), len(self._chat_history))
             
             return response
             
         except Exception:
+            logger.exception("agent_invoke_failed")
             return self._get_fallback_response(user_message)
     
     def reset(self):
