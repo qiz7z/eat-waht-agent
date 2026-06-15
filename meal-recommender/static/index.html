@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>今天吃什么 🍜</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary: #FF6B35;
+      --primary-light: #FF8C5A;
+      --primary-dark: #E85520;
+      --accent: #FFBE0B;
+      --accent-light: #FFD23F;
+      --success: #06D6A0;
+      --bg: #FFF9F5;
+      --bg-card: #FFFFFF;
+      --text-primary: #1A1A2E;
+      --text-secondary: #6B7280;
+      --border: #F0E8E0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100dvh;
+      margin: 0;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #E0D6CC; border-radius: 3px; }
+
+    /* ── Chat bubble ── */
+    .bubble-bot {
+      background: #FFFFFF;
+      border: 1.5px solid var(--border);
+      border-radius: 18px 18px 18px 4px;
+      box-shadow: 0 2px 12px rgba(255,107,53,0.07);
+    }
+    .bubble-user {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #fff;
+      border-radius: 18px 18px 4px 18px;
+    }
+
+    /* ── Recommendation card ── */
+    .rec-card {
+      background: linear-gradient(145deg, #FFFAF6 0%, #FFF3E8 100%);
+      border: 1.5px solid #FFD4B8;
+      border-radius: 20px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .rec-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(255,107,53,0.15); }
+    .rec-card.primary { border-color: var(--primary); background: linear-gradient(145deg, #FFF0E8 0%, #FFE2CF 100%); }
+
+    .alt-card {
+      background: #FFFFFF;
+      border: 1.5px solid #E8E0D8;
+      border-radius: 16px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .alt-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+
+    /* ── Quick chips ── */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 7px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 50px;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--text-primary);
+      background: #FFFFFF;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .chip:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: #FFF0E8;
+      transform: translateY(-1px);
+    }
+    .chip:active { transform: scale(0.96); }
+
+    /* ── Input area ── */
+    .input-bar {
+      background: #FFFFFF;
+      border: 2px solid var(--border);
+      border-radius: 24px;
+      transition: border-color 0.18s, box-shadow 0.18s;
+    }
+    .input-bar:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(255,107,53,0.12);
+    }
+
+    #msg-input {
+      outline: none;
+      border: none;
+      background: transparent;
+      resize: none;
+      font-family: inherit;
+      font-size: 15px;
+      color: var(--text-primary);
+      line-height: 1.5;
+      max-height: 120px;
+    }
+    #msg-input::placeholder { color: #B0A8A0; }
+
+    /* ── Send button ── */
+    .send-btn {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.18s ease;
+      flex-shrink: 0;
+    }
+    .send-btn:hover { transform: scale(1.08); box-shadow: 0 4px 16px rgba(255,107,53,0.4); }
+    .send-btn:active { transform: scale(0.94); }
+    .send-btn:disabled { background: #D1C8C0; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* ── Reset button ── */
+    .reset-btn {
+      padding: 8px 20px;
+      border: 1.5px solid #E0D6CC;
+      border-radius: 50px;
+      background: #FFFFFF;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .reset-btn:hover { border-color: var(--primary); color: var(--primary); background: #FFF0E8; }
+
+    /* ── Typing dots ── */
+    .typing-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--primary);
+      animation: bounce 1.2s infinite;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* ── Message enter animation ── */
+    @keyframes msgIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg-animate { animation: msgIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+    /* ── Sidebar stats ── */
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: #F9F4F0;
+      font-size: 13px;
+    }
+    .stat-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Header gradient text ── */
+    .brand-title {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── Mobile bottom nav ── */
+    @media (max-width: 767px) {
+      .sidebar { display: none !important; }
+      .chat-container { border-radius: 0 !important; height: 100dvh !important; }
+    }
+
+    /* ── Progress bar ── */
+    .progress-bar-fill {
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+      transition: width 0.5s ease;
+    }
+
+    /* ── Tag badge ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 10px;
+      border-radius: 50px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════
+     TOP HEADER (Mobile)
+════════════════════════════════════ -->
+<header class="md:hidden sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-orange-100 px-4 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-2">
+    <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white text-lg">🍜</div>
+    <span class="font-bold text-base brand-title">今天吃什么</span>
+  </div>
+  <button class="reset-btn text-xs px-3 py-1.5" onclick="resetChat()">重新开始</button>
+</header>
+
+<!-- ════════════════════════════════════
+     MAIN LAYOUT
+════════════════════════════════════ -->
+<div class="flex h-screen md:h-dvh overflow-hidden max-w-[1280px] mx-auto">
+
+  <!-- ── LEFT SIDEBAR ── -->
+  <aside class="sidebar hidden md:flex flex-col w-[280px] lg:w-[300px] shrink-0 p-5 gap-4 overflow-y-auto">
+
+    <!-- Brand -->
+    <div class="flex items-center gap-3 px-2 pt-2">
+      <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-2xl shadow-lg shadow-orange-200">🍜</div>
+      <div>
+        <h1 class="font-extrabold text-xl leading-tight brand-title">今天吃什么</h1>
+        <p class="text-xs text-gray-400 mt-0.5">AI 智能餐饮推荐</p>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="h-px bg-orange-100 mx-2"></div>
+
+    <!-- Preference progress -->
+    <div class="bg-white border border-orange-100 rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-semibold text-gray-700">偏好收集进度</span>
+        <span id="pref-count" class="badge bg-orange-100 text-orange-600">0/5</span>
+      </div>
+      <div class="bg-gray-100 rounded-full overflow-hidden">
+        <div id="pref-progress" class="progress-bar-fill" style="width:0%"></div>
+      </div>
+      <div id="pref-tags" class="flex flex-wrap gap-1.5 mt-3 min-h-[28px]">
+        <span class="text-xs text-gray-400 italic">还未收集任何偏好…</span>
+      </div>
+    </div>
+
+    <!-- Current context -->
+    <div class="bg-white border border-orange-100 rounded-2xl p-4 shadow-sm">
+      <p class="text-sm font-semibold text-gray-700 mb-3">当前信息</p>
+      <div class="flex flex-col gap-2">
+        <div class="stat-item">
+          <span class="stat-dot bg-orange-400"></span>
+          <span id="ctx-time" class="text-gray-600">──</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-dot bg-sky-400"></span>
+          <span id="ctx-weather" class="text-gray-600">──</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-dot bg-green-400"></span>
+          <span id="ctx-date" class="text-gray-600">──</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick start guide -->
+    <div class="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4">
+      <p class="text-sm font-semibold text-orange-700 mb-2">💡 快速开始</p>
+      <ul class="text-xs text-orange-800/70 space-y-1.5">
+        <li>· 告诉我你的口味偏好</li>
+        <li>· 说说今天的预算</li>
+        <li>· 可以直接问"帮我推荐一个"</li>
+        <li>· 输入"重新开始"重置会话</li>
+      </ul>
+    </div>
+
+    <!-- Spacer -->
+    <div class="flex-1"></div>
+
+    <!-- Reset -->
+    <button class="reset-btn w-full text-center" onclick="resetChat()">
+      ↺ &nbsp;重新开始推荐
+    </button>
+    <p class="text-center text-xs text-gray-400 pb-2">由 LangChain + OpenAI 驱动</p>
+  </aside>
+
+  <!-- ── CHAT AREA ── -->
+  <main class="flex flex-col flex-1 min-w-0 md:py-4 md:pr-4">
+    <div class="chat-container flex flex-col flex-1 bg-white md:rounded-3xl md:border md:border-orange-100 md:shadow-sm overflow-hidden">
+
+      <!-- Chat header (desktop) -->
+      <div class="hidden md:flex items-center justify-between px-6 py-4 border-b border-orange-50">
+        <div>
+          <h2 class="font-bold text-gray-800">和 AI 聊聊吃什么</h2>
+          <p class="text-xs text-gray-400 mt-0.5">综合口味、预算、天气、心情给你推荐最合适的一餐</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="status-dot" class="inline-block w-2 h-2 rounded-full bg-green-400"></span>
+          <span id="status-text" class="text-xs text-gray-500">AI 就绪</span>
+        </div>
+      </div>
+
+      <!-- Messages area -->
+      <div id="messages" class="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-4 scroll-smooth">
+
+        <!-- Welcome message (static initial) -->
+        <div class="flex items-start gap-3 msg-animate">
+          <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-lg shrink-0 shadow-md shadow-orange-200 mt-0.5">🍜</div>
+          <div class="bubble-bot max-w-[80%] md:max-w-[70%] px-4 py-3.5">
+            <p class="text-sm leading-relaxed text-gray-800">
+              你好！我是你的<strong class="text-orange-500">AI 餐饮推荐助手</strong> 👋<br/>
+              今天想吃什么？告诉我你的口味、预算、人数，或者直接说<em class="text-orange-400">「帮我推荐一个」</em>，我来帮你决定！
+            </p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button class="chip text-xs" onclick="sendQuick('帮我随机推荐一个')">🎲 随机推荐</button>
+              <button class="chip text-xs" onclick="sendQuick('我想吃辣的，预算30以内')">🌶️ 辣味低预算</button>
+              <button class="chip text-xs" onclick="sendQuick('最近在减肥，推荐清淡的')">🥗 健康轻食</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Quick suggestion chips (scrollable row) -->
+      <div id="quick-chips" class="px-4 md:px-6 py-2 border-t border-orange-50 flex gap-2 overflow-x-auto scrollbar-none" style="-ms-overflow-style:none;scrollbar-width:none;">
+        <button class="chip shrink-0" onclick="sendQuick('清淡口味')">清淡</button>
+        <button class="chip shrink-0" onclick="sendQuick('重口味')">重口</button>
+        <button class="chip shrink-0" onclick="sendQuick('辣的')">🌶️ 辣</button>
+        <button class="chip shrink-0" onclick="sendQuick('预算10元以下')">10元以下</button>
+        <button class="chip shrink-0" onclick="sendQuick('预算10到30元')">10-30元</button>
+        <button class="chip shrink-0" onclick="sendQuick('我在减肥')">减肥餐</button>
+        <button class="chip shrink-0" onclick="sendQuick('朋友聚餐')">聚餐</button>
+        <button class="chip shrink-0" onclick="sendQuick('一个人吃')">独食</button>
+        <button class="chip shrink-0" onclick="sendQuick('赶时间')">⚡ 快餐</button>
+      </div>
+
+      <!-- Input bar -->
+      <div class="px-4 md:px-6 py-4 border-t border-orange-50">
+        <div class="input-bar flex items-end gap-3 px-4 py-3">
+          <textarea
+            id="msg-input"
+            rows="1"
+            placeholder="说说你想吃什么…（回车发送，Shift+回车换行）"
+            class="flex-1 overflow-hidden"
+            oninput="autoResize(this)"
+            onkeydown="handleKey(event)"
+          ></textarea>
+          <button class="send-btn shrink-0" id="send-btn" onclick="sendMessage()" title="发送">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+        <p class="text-center text-xs text-gray-300 mt-2">AI 推荐仅供参考，最终决定由你做主 🙂</p>
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+
+<!-- ════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════ -->
+<script>
+// ── State ──────────────────────────────────────────
+const state = {
+  isLoading: false,
+  preferences: {},
+  sessionId: Date.now().toString(),
+  gradioUrl: 'http://localhost:7860'  // Gradio backend URL
+};
+
+const PREF_LABELS = {
+  taste:   { label: '口味', color: 'bg-orange-100 text-orange-700' },
+  budget:  { label: '预算', color: 'bg-yellow-100 text-yellow-700' },
+  health:  { label: '健康', color: 'bg-green-100 text-green-700' },
+  social:  { label: '社交', color: 'bg-blue-100 text-blue-700' },
+  mood:    { label: '心情', color: 'bg-purple-100 text-purple-700' },
+  weather: { label: '天气', color: 'bg-sky-100 text-sky-700' },
+};
+
+// ── Context info ───────────────────────────────────
+function updateContextUI() {
+  const now = new Date();
+  const h = now.getHours();
+  const timeLabel = h < 5 ? '深夜' : h < 10 ? '早餐时间' : h < 14 ? '午餐时间' : h < 17 ? '下午茶时间' : h < 20 ? '晚餐时间' : '夜宵时间';
+  const dateStr = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
+
+  document.getElementById('ctx-time').textContent = timeLabel;
+  document.getElementById('ctx-date').textContent = dateStr;
+  document.getElementById('ctx-weather').textContent = '天气：晴天（示例）';
+}
+updateContextUI();
+
+// ── Auto resize textarea ───────────────────────────
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── Keyboard handler ──────────────────────────────
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+// ── Quick send ─────────────────────────────────────
+function sendQuick(text) {
+  document.getElementById('msg-input').value = text;
+  sendMessage();
+}
+
+// ── Render a chat message ──────────────────────────
+function renderMessage(role, content) {
+  const container = document.getElementById('messages');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'flex items-start gap-3 msg-animate ' + (role === 'user' ? 'flex-row-reverse' : '');
+
+  // Avatar
+  const avatar = document.createElement('div');
+  if (role === 'bot') {
+    avatar.className = 'w-9 h-9 rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-lg shrink-0 shadow-md shadow-orange-200 mt-0.5';
+    avatar.textContent = '🍜';
+  } else {
+    avatar.className = 'w-9 h-9 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center shrink-0 mt-0.5 text-base';
+    avatar.textContent = '🧑';
+  }
+
+  // Bubble
+  const bubble = document.createElement('div');
+  bubble.className = (role === 'bot' ? 'bubble-bot' : 'bubble-user') + ' max-w-[80%] md:max-w-[70%] px-4 py-3.5';
+
+  // Parse special recommendation blocks
+  const parsed = parseContent(content, role);
+  bubble.innerHTML = parsed;
+
+  wrap.appendChild(avatar);
+  wrap.appendChild(bubble);
+  container.appendChild(wrap);
+  container.scrollTop = container.scrollHeight;
+  return wrap;
+}
+
+// ── Content parser ─────────────────────────────────
+function parseContent(text, role) {
+  // If contains recommendation markers, render as cards
+  if (text.includes('【主推荐】') || text.includes('⭐') || text.includes('🥇')) {
+    return renderRecommendation(text);
+  }
+
+  const colorClass = role === 'user' ? 'text-white' : 'text-gray-800';
+
+  // Convert markdown-ish formatting
+  let html = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code class="bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded text-xs font-mono">$1</code>')
+    .replace(/^#{1,3}\s(.+)$/gm, '<p class="font-bold text-sm mt-2 mb-1">$1</p>')
+    .replace(/\n/g, '<br/>');
+
+  return `<div class="text-sm leading-relaxed ${colorClass}">${html}</div>`;
+}
+
+function renderRecommendation(text) {
+  // Extract recommendation sections
+  const lines = text.split('\n');
+  let html = `<div class="space-y-3 text-sm">`;
+
+  let section = null;
+  let sectionContent = [];
+
+  const flushSection = () => {
+    if (!section) return;
+    const content = sectionContent.join('\n').trim();
+    if (section === 'primary') {
+      html += buildPrimaryCard(content);
+    } else if (section === 'alt') {
+      html += buildAltCard(content);
+    } else {
+      html += `<p class="text-gray-600 text-xs leading-relaxed">${content.replace(/\n/g,'<br/>')}</p>`;
+    }
+    sectionContent = [];
+  };
+
+  for (const line of lines) {
+    if (/【主推荐】|🥇|⭐ 主推/.test(line)) {
+      flushSection(); section = 'primary';
+    } else if (/【备选|🥈|🥉|备选/.test(line)) {
+      flushSection(); section = 'alt';
+    } else if (/总结|推荐语/.test(line)) {
+      flushSection(); section = 'summary';
+    } else {
+      sectionContent.push(line);
+    }
+  }
+  flushSection();
+  html += '</div>';
+  return html;
+}
+
+function buildPrimaryCard(content) {
+  const lines = content.split('\n').filter(Boolean);
+  const name = lines[0] || '推荐餐品';
+  const details = lines.slice(1).join(' ').trim();
+  return `
+    <div class="rec-card primary p-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="badge bg-orange-500 text-white text-xs">🥇 主推荐</span>
+        <span class="text-orange-400 text-lg">🍽️</span>
+      </div>
+      <p class="font-bold text-base text-gray-900">${name}</p>
+      ${details ? `<p class="text-xs text-gray-600 mt-1.5 leading-relaxed">${details.replace(/\n/g,'<br/>')}</p>` : ''}
+    </div>`;
+}
+
+function buildAltCard(content) {
+  const lines = content.split('\n').filter(Boolean);
+  const name = lines[0] || '备选';
+  const details = lines.slice(1).join(' ').trim();
+  return `
+    <div class="alt-card p-3.5">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="badge bg-gray-100 text-gray-600 text-xs">备选方案</span>
+      </div>
+      <p class="font-semibold text-sm text-gray-800">${name}</p>
+      ${details ? `<p class="text-xs text-gray-500 mt-1 leading-relaxed">${details}</p>` : ''}
+    </div>`;
+}
+
+// ── Typing indicator ──────────────────────────────
+function showTyping() {
+  const container = document.getElementById('messages');
+  const wrap = document.createElement('div');
+  wrap.id = 'typing-indicator';
+  wrap.className = 'flex items-start gap-3 msg-animate';
+  wrap.innerHTML = `
+    <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-lg shrink-0 shadow-md shadow-orange-200 mt-0.5">🍜</div>
+    <div class="bubble-bot px-4 py-3.5">
+      <div class="flex gap-1.5 items-center h-5">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+    </div>`;
+  container.appendChild(wrap);
+  container.scrollTop = container.scrollHeight;
+}
+
+function hideTyping() {
+  document.getElementById('typing-indicator')?.remove();
+}
+
+// ── Update preference panel ────────────────────────
+function updatePrefPanel(text) {
+  // Heuristic extraction from bot response
+  const map = {
+    taste:  [/清淡|重口|辣|不辣|随意/],
+    budget: [/10元|10-30|30-50|50元以上|元/],
+    health: [/减肥|增肌|素食|无特殊/],
+    social: [/独自|聚餐|约会|赶时间/],
+    mood:   [/开心|疲惫|压力|无所谓/],
+  };
+
+  let updated = false;
+  for (const [key, patterns] of Object.entries(map)) {
+    for (const p of patterns) {
+      if (p.test(text) && !state.preferences[key]) {
+        state.preferences[key] = text.match(p)?.[0] || '已记录';
+        updated = true;
+        break;
+      }
+    }
+  }
+
+  if (!updated) return;
+
+  const count = Object.keys(state.preferences).length;
+  document.getElementById('pref-count').textContent = `${count}/5`;
+  document.getElementById('pref-progress').style.width = `${(count / 5) * 100}%`;
+
+  const tagsEl = document.getElementById('pref-tags');
+  if (count === 0) {
+    tagsEl.innerHTML = '<span class="text-xs text-gray-400 italic">还未收集任何偏好…</span>';
+  } else {
+    tagsEl.innerHTML = Object.entries(state.preferences).map(([key, val]) => {
+      const cfg = PREF_LABELS[key] || { label: key, color: 'bg-gray-100 text-gray-600' };
+      return `<span class="badge ${cfg.color} text-xs">${cfg.label}: ${val}</span>`;
+    }).join('');
+  }
+}
+
+// ── Set loading state ─────────────────────────────
+function setLoading(loading) {
+  state.isLoading = loading;
+  const btn = document.getElementById('send-btn');
+  const input = document.getElementById('msg-input');
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  btn.disabled = loading;
+  input.disabled = loading;
+  if (loading) {
+    statusDot.className = 'inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+    statusText.textContent = 'AI 思考中…';
+  } else {
+    statusDot.className = 'inline-block w-2 h-2 rounded-full bg-green-400';
+    statusText.textContent = 'AI 就绪';
+  }
+}
+
+// ── Send message ───────────────────────────────────
+async function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text || state.isLoading) return;
+
+  // Clear & render user message
+  input.value = '';
+  input.style.height = 'auto';
+  renderMessage('user', text);
+
+  // Handle local commands
+  if (/重新开始|重置|reset/i.test(text)) {
+    resetChat();
+    return;
+  }
+
+  setLoading(true);
+  showTyping();
+
+  try {
+    const reply = await callGradio(text);
+    hideTyping();
+    renderMessage('bot', reply);
+    updatePrefPanel(reply);
+  } catch (err) {
+    hideTyping();
+    renderMessage('bot', `抱歉，连接 AI 服务时出现了问题 😅\n\n请确认 Gradio 服务已在 ${state.gradioUrl} 启动，然后重试。`);
+  } finally {
+    setLoading(false);
+    input.focus();
+  }
+}
+
+// ── Call Gradio API ────────────────────────────────
+async function callGradio(message) {
+  // Gradio queue API
+  const endpoint = `${state.gradioUrl}/api/predict`;
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      data: [message, []],
+      fn_index: 0
+    })
+  });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+
+  // Gradio chat returns array of tuples [[user_msg, bot_msg], ...]
+  const history = json.data?.[0];
+  if (Array.isArray(history) && history.length > 0) {
+    const last = history[history.length - 1];
+    return Array.isArray(last) ? (last[1] || '…') : (last || '…');
+  }
+  return json.data?.[1] || json.data?.[0] || '收到，请稍等…';
+}
+
+// ── Reset chat ─────────────────────────────────────
+function resetChat() {
+  const container = document.getElementById('messages');
+  container.innerHTML = '';
+  state.preferences = {};
+  state.isLoading = false;
+
+  // Reset pref panel
+  document.getElementById('pref-count').textContent = '0/5';
+  document.getElementById('pref-progress').style.width = '0%';
+  document.getElementById('pref-tags').innerHTML = '<span class="text-xs text-gray-400 italic">还未收集任何偏好…</span>';
+
+  setLoading(false);
+
+  // Notify backend
+  fetch(`${state.gradioUrl}/api/predict`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: ['重新开始', []], fn_index: 0 })
+  }).catch(() => {});
+
+  // Re-render welcome
+  renderMessage('bot', `好的，我们重新开始！🍜\n\n告诉我你今天想吃什么风格的食物，或者直接说「帮我推荐一个」，我来帮你决定！`);
+  const last = document.querySelector('#messages .flex:last-child .bubble-bot');
+  if (last) {
+    last.innerHTML += `<div class="mt-3 flex flex-wrap gap-2">
+      <button class="chip text-xs" onclick="sendQuick('帮我随机推荐一个')">🎲 随机推荐</button>
+      <button class="chip text-xs" onclick="sendQuick('我想吃辣的，预算30以内')">🌶️ 辣味低预算</button>
+      <button class="chip text-xs" onclick="sendQuick('最近在减肥，推荐清淡的')">🥗 健康轻食</button>
+    </div>`;
+  }
+}
+
+// ── Init ──────────────────────────────────────────
+document.getElementById('msg-input').focus();
+</script>
+</body>
+</html>
