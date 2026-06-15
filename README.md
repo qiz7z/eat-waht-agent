@@ -80,23 +80,22 @@ Agent：为你生成推荐...
 ## 项目结构
 
 ```
-meal-recommender/
-├── app.py               # Gradio Web UI 入口
-├── agent/               # Agent 核心模块
+eat-what-agent/
+├── app.py                # Gradio Web UI 入口
+├── agent/                # Agent 核心模块
 │   ├── __init__.py
-│   ├── models.py        # 数据模型
-│   ├── context.py       # 上下文服务（时间、天气）
-│   ├── preference.py    # 偏好收集器
+│   ├── config.py         # 大模型统一配置
+│   ├── models.py         # 数据模型
+│   ├── context.py        # 上下文服务（时间、天气）
+│   ├── preference.py     # 偏好收集器
 │   ├── recommendation.py # 推荐引擎
-│   └── controller.py    # Agent 控制器
-├── tests/               # 单元测试
-│   ├── test_models.py
-│   ├── test_context.py
-│   ├── test_preference.py
-│   └── test_controller.py
-├── requirements.txt     # Python 依赖
-├── .env.example         # 环境变量模板
-└── README.md            # 项目说明
+│   └── controller.py     # Agent 控制器
+├── static/               # 独立前端页面
+│   └── index.html
+├── tests/                # 单元测试
+├── requirements.txt      # Python 依赖
+├── .env.example          # 环境变量模板
+└── README.md             # 项目说明
 ```
 
 ## 技术栈
