@@ -8,14 +8,17 @@
 - **智能追问**：像朋友一样聊天，逐步了解你的口味和需求
 - **全维度推荐**：综合考虑口味、预算、天气、心情、健康、社交场景等因素
 - **追问式策略**：1 个主要推荐 + 2 个备选方案，不满意可以再选
+- **本地食物数据库**：内置 75+ 种常见中式食物，支持按口味、预算、类别搜索
+- **食物排行榜**：实时热门食物排行榜，一键获取推荐
+- **数据爬虫**：支持从美食杰等网站自动爬取更新食物数据
 - **会话隔离**：每个用户会话拥有独立偏好状态，避免串话
 - **会话生命周期管理**：支持 TTL 自动过期和最大会话数限制
 - **统一模型配置**：集中管理 `api_key`、`model`、`base_url`、温度和超时
-- **标准 API**：提供 FastAPI `/chat`、`/reset`、`/health` 接口
-- **运行日志**：记录 Agent 调用、工具调用和异常信息
+- **标准 API**：提供 FastAPI `/chat`、`/reset`、`/health`、`/food_rankings`、`/search_food` 等接口
+- **运行日志**：记录 Agent 调用、工具调用和异常信息（支持脱敏）
 - **行为评测**：提供轻量 eval 脚本验证关键 Agent 行为
 - **Docker 部署**：提供 Dockerfile 和 docker-compose 一键部署
-- **Web 界面**：提供 Vue 3 + TypeScript 前端，支持多轮对话交互
+- **Web 界面**：提供 Vue 3 + TypeScript 前端，支持多轮对话和食物排行榜
 - **本地运行**：支持本地部署，保护隐私
 
 ## Agent 架构设计
@@ -259,6 +262,17 @@ curl -X POST http://localhost:8000/chat \
 curl -X POST http://localhost:8000/reset \
   -H "Content-Type: application/json" \
   -d "{\"session_id\":\"你的 session_id\"}"
+
+# 获取食物排行榜
+curl http://localhost:8000/food_rankings?limit=10
+
+# 搜索食物
+curl -X POST http://localhost:8000/search_food \
+  -H "Content-Type: application/json" \
+  -d "{\"taste\":\"辣\", \"budget\":\"20-30元\"}"
+
+# 获取食物统计
+curl http://localhost:8000/food_stats
 ```
 
 ### 4. 启动 Vue 前端（可选）
@@ -306,47 +320,55 @@ Agent：为你生成推荐...
 
 ```
 eat-what-agent/
-├── api.py                # FastAPI 标准接口入口（含会话 TTL 管理）
-├── agent/                # Agent 核心模块
+├── api.py                    # FastAPI 标准接口入口（含会话 TTL 管理）
+├── agent/                    # Agent 核心模块
 │   ├── __init__.py
-│   ├── agent.py          # LangChain Tool Calling Agent 主类
-│   ├── config.py         # 大模型统一配置
-│   ├── logging_config.py # 日志配置
-│   ├── models.py         # 数据模型
-│   └── tools.py          # LangChain 工具定义
-├── frontend/             # Vue 3 + TypeScript 前端
+│   ├── agent.py              # LangChain Tool Calling Agent 主类
+│   ├── config.py             # 大模型统一配置
+│   ├── logging_config.py     # 日志配置（线程安全）
+│   ├── models.py             # 数据模型
+│   ├── tools.py              # LangChain 工具定义（10个工具）
+│   ├── food_data_manager.py  # 食物数据库管理器
+│   └── crawler.py            # 食物数据爬虫
+├── data/                     # 数据目录
+│   └── food_database.json    # 食物数据库（75+种食物）
+├── frontend/                 # Vue 3 + TypeScript 前端
 │   ├── src/
-│   │   ├── App.vue       # 主界面
-│   │   ├── api.ts        # API 客户端
+│   │   ├── App.vue           # 主界面（含食物排行榜）
+│   │   ├── api.ts            # API 客户端
 │   │   └── components/
 │   │       ├── ChatMessage.vue     # 聊天气泡组件
 │   │       └── TypingIndicator.vue # 打字指示器
-│   ├── vite.config.ts    # Vite 代理配置
+│   ├── vite.config.ts        # Vite 代理配置
 │   └── package.json
-├── tests/                # 单元测试
+├── static/                   # 前端构建输出
+├── tests/                    # 单元测试（47个用例）
 │   ├── test_agent.py
-│   ├── test_api.py       # FastAPI 接口测试
+│   ├── test_api.py           # FastAPI 接口测试
 │   ├── test_config.py
 │   ├── test_models.py
 │   └── test_tools.py
-├── evals/                # Agent 行为评测
+├── evals/                    # Agent 行为评测
 │   └── agent_eval.py
-├── Dockerfile            # Docker 镜像定义
-├── docker-compose.yml    # Docker Compose 编排
-├── Makefile              # 常用开发命令
-├── requirements.txt      # Python 依赖
-├── .env.example          # 环境变量模板
-└── README.md             # 项目说明
+├── Dockerfile                # Docker 镜像定义
+├── docker-compose.yml        # Docker Compose 编排
+├── Makefile                  # 常用开发命令
+├── requirements.txt          # Python 依赖
+├── .env.example              # 环境变量模板
+├── PROJECT_ANALYSIS.md       # 项目深度分析报告
+├── FIX_REPORT.md             # 问题修复报告
+└── README.md                 # 项目说明
 ```
 
 ## 技术栈
 
 - **Python 3.11+**
-- **LangChain** - 大语言模型框架
+- **LangChain 1.3.9** - 大语言模型框架
 - **FastAPI** - 标准 API 服务
 - **Vue 3 + TypeScript** - 前端框架
 - **Vite** - 前端构建工具
 - **Pydantic** - 数据验证
+- **BeautifulSoup4** - 网页爬虫
 - **Docker** - 容器化部署
 
 ## 开发
@@ -409,6 +431,8 @@ LOG_FILE=agent.log
 | `SESSION_TTL_SECONDS` | 会话过期时间（秒） | `3600` |
 | `MAX_SESSIONS` | 最大同时活跃会话数 | `200` |
 | `CORS_ALLOW_ORIGINS` | CORS 允许的来源，逗号分隔 | `*` |
+| `CORS_ALLOW_METHODS` | CORS 允许的方法，逗号分隔 | `GET,POST,DELETE,OPTIONS` |
+| `CORS_ALLOW_HEADERS` | CORS 允许的头部，逗号分隔 | `*` |
 | `LOG_LEVEL` | 日志级别 | `INFO` |
 | `LOG_DIR` | 日志目录 | `logs` |
 | `LOG_FILE` | 日志文件名 | `agent.log` |
@@ -418,13 +442,15 @@ LOG_FILE=agent.log
 本项目覆盖了一个 Agent MVP 的主要开发环节：
 
 1. **角色定义**：`SYSTEM_PROMPT` 定义助手角色、语气和任务流程
-2. **工具设计**：`agent/tools.py` 提供上下文、偏好、推荐和重置工具
+2. **工具设计**：`agent/tools.py` 提供 10 个工具（上下文、偏好、推荐、食物数据库等）
 3. **状态管理**：`SessionStateManager` 隔离多用户会话状态
 4. **模型配置**：`agent/config.py` 统一管理 OpenAI-compatible 模型接入
-5. **交互入口**：`frontend/` 提供 Vue 3 聊天界面，`api.py` 提供标准 API
-6. **观测能力**：`agent/logging_config.py` 记录运行链路与异常
-7. **质量保障**：`tests/` 提供单元测试，`evals/` 提供 Agent 行为评测
-8. **降级策略**：无 API Key 或模型失败时返回本地推荐兜底
+5. **数据管理**：`agent/food_data_manager.py` 管理 75+ 种食物的本地数据库
+6. **数据采集**：`agent/crawler.py` 支持从公开网站爬取食物数据
+7. **交互入口**：`frontend/` 提供 Vue 3 聊天界面和食物排行榜，`api.py` 提供标准 API
+8. **观测能力**：`agent/logging_config.py` 记录运行链路与异常（支持脱敏）
+9. **质量保障**：`tests/` 提供 47 个单元测试，`evals/` 提供 Agent 行为评测
+10. **降级策略**：无 API Key 或模型失败时返回本地推荐兜底
 
 ## License
 
