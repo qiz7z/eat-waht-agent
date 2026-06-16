@@ -313,10 +313,6 @@ eat-what-agent/
 │   ├── config.py         # 大模型统一配置
 │   ├── logging_config.py # 日志配置
 │   ├── models.py         # 数据模型
-│   ├── context.py        # 上下文服务（时间、天气）
-│   ├── preference.py     # 偏好收集器
-│   ├── recommendation.py # 推荐引擎
-│   ├── controller.py     # Agent 控制器
 │   └── tools.py          # LangChain 工具定义
 ├── frontend/             # Vue 3 + TypeScript 前端
 │   ├── src/
@@ -331,10 +327,7 @@ eat-what-agent/
 │   ├── test_agent.py
 │   ├── test_api.py       # FastAPI 接口测试
 │   ├── test_config.py
-│   ├── test_context.py
-│   ├── test_controller.py
 │   ├── test_models.py
-│   ├── test_preference.py
 │   └── test_tools.py
 ├── evals/                # Agent 行为评测
 │   └── agent_eval.py

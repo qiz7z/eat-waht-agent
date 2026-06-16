@@ -176,3 +176,17 @@ logs/
 *.lz
 *.lzma
 *.iso
+
+# Project specific
+.workbuddy/
+*.txt (test output files)
+agent_test_output.txt
+api_test_output.txt
+date_test_output.txt
+llm_test.txt
+tool_output.txt
+system_prompt_check.txt
+api_run.err
+frontend_run.err
+nul
+food_database_preview.html

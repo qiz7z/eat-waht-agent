@@ -112,5 +112,6 @@ class TestLLMConfig:
                 "model": "test-model",
                 "api_key": "test-key",
                 "temperature": 0.2,
+                "timeout": 15,
                 "base_url": "https://test.example.com/v1",
             }

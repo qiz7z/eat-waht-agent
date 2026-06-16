@@ -107,6 +107,7 @@ def build_chat_openai_kwargs(config: LLMConfig) -> dict:
         "model": config.model,
         "api_key": config.api_key,
         "temperature": config.temperature,
+        "timeout": config.timeout,
     }
     if config.base_url:
         kwargs["base_url"] = config.base_url

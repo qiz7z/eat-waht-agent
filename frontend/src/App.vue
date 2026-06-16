@@ -2,7 +2,7 @@
 import { ref, nextTick, onMounted, computed } from 'vue'
 import ChatMessage from './components/ChatMessage.vue'
 import TypingIndicator from './components/TypingIndicator.vue'
-import { sendMessage as apiSendMessage, resetSession, clearSession } from './api'
+import { sendMessage as apiSendMessage, resetSession, clearSession, getFoodRankings, type FoodItem } from './api'
 
 // ── State ──
 interface Message {
@@ -16,6 +16,10 @@ const isLoading = ref(false)
 const isReady = ref(true)
 const messagesContainer = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+// ── Food rankings ──
+const trendingFoods = ref<FoodItem[]>([])
+const isLoadingRankings = ref(false)
 
 // ── Welcome message ──
 const WELCOME_MSG = `你好！我是你的 **AI 餐饮推荐助手** 👋
@@ -44,10 +48,28 @@ const contextInfo = computed(() => {
 })
 
 // ── Init ──
-onMounted(() => {
+onMounted(async () => {
   messages.value.push({ role: 'bot', content: WELCOME_MSG })
   scrollToBottom()
+  
+  // 加载热门排行榜
+  await loadTrendingFoods()
 })
+
+// ── Load trending foods ──
+async function loadTrendingFoods() {
+  isLoadingRankings.value = true
+  try {
+    const res = await getFoodRankings(8)
+    if (res.success) {
+      trendingFoods.value = res.foods
+    }
+  } catch (err) {
+    console.error('Failed to load rankings:', err)
+  } finally {
+    isLoadingRankings.value = false
+  }
+}
 
 // ── Scroll ──
 async function scrollToBottom() {
@@ -182,6 +204,27 @@ function resetTextareaHeight() {
           <li>说说今天的预算</li>
           <li>可以直接问"帮我推荐一个"</li>
           <li>输入"重新开始"重置会话</li>
+        </ul>
+      </div>
+
+      <!-- Trending foods -->
+      <div class="sidebar-card card-trending">
+        <p class="card-title trending-title">
+          <span>🔥 热门排行</span>
+          <button class="refresh-btn" @click="loadTrendingFoods" :disabled="isLoadingRankings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ 'spin': isLoadingRankings }">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
+        </p>
+        <div v-if="isLoadingRankings" class="loading-ranking">加载中...</div>
+        <ul v-else class="ranking-list">
+          <li v-for="food in trendingFoods" :key="food.rank" class="ranking-item" @click="sendMessage(`我想吃${food.name}`)">
+            <span class="rank-num">{{ food.rank }}</span>
+            <span class="rank-name">{{ food.name }}</span>
+            <span class="rank-price">{{ food.price_range }}</span>
+          </li>
         </ul>
       </div>
 
@@ -407,6 +450,109 @@ function resetTextareaHeight() {
 .tip-list li {
   margin-bottom: 6px;
   line-height: 1.5;
+}
+
+/* Trending foods card */
+.card-trending {
+  background: linear-gradient(145deg, #FFF5F5 0%, #FFF0F0 100%);
+  border-color: #FECACA;
+}
+
+.trending-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #DC2626;
+}
+
+.refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  color: #DC2626;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.refresh-btn svg.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-ranking {
+  text-align: center;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.ranking-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ranking-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.18s;
+  font-size: 13px;
+}
+
+.ranking-item:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateX(4px);
+}
+
+.rank-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ranking-item:nth-child(1) .rank-num { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); }
+.ranking-item:nth-child(2) .rank-num { background: linear-gradient(135deg, #6B7280 0%, #4B5563 100%); }
+.ranking-item:nth-child(3) .rank-num { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
+
+.rank-name {
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.rank-price {
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 .sidebar-spacer {

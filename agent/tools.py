@@ -1,5 +1,6 @@
 """Tools for the meal recommender agent - 使用 per-agent 隔离状态"""
 
+import json
 from typing import Dict
 from datetime import datetime
 from contextvars import ContextVar
@@ -8,6 +9,7 @@ import threading
 from langchain_core.tools import tool
 
 from .logging_config import get_logger
+from .food_data_manager import get_food_manager
 
 
 logger = get_logger(__name__)
@@ -18,6 +20,8 @@ _current_agent_id: ContextVar[str | None] = ContextVar("agent_id", default=None)
 
 
 # 全局状态存储 + 线程锁
+# 注意：_agent_states 是进程内全局字典，uvicorn 多 worker 模式下无法共享
+# 当前设计适用于单 worker 模式，如需多 worker 需使用 Redis 等外部存储
 _agent_states: Dict[str, Dict] = {}
 _state_lock = threading.Lock()
 
@@ -32,6 +36,8 @@ def _make_fresh_state() -> Dict:
         "health": "",
         "social": "",
         "mood": "",
+        "city": "",
+        "school": "",
         "count": 1,
         "has_recommendation": False,
     }
@@ -74,6 +80,10 @@ def _get_preferences() -> str:
     state = _get_state()
     
     parts = []
+    if state.get("city"):
+        parts.append(f"城市：{state['city']}")
+    if state.get("school"):
+        parts.append(f"学校：{state['school']}")
     if state.get("taste"):
         parts.append(f"口味：{state['taste']}")
     if state.get("budget"):
@@ -106,16 +116,45 @@ def _get_context_info() -> str:
     else:
         meal_time = "夜宵"
     
-    weather = "晴天"
-    
+    # 获取城市信息
     agent_id = _current_agent_id.get()
+    city = ""
     if agent_id:
         state = _get_state()
+        city = state.get("city", "")
+    
+    # 根据城市获取天气（简化版，实际可对接天气API）
+    if city:
+        # 简单的城市天气映射（实际应该调用天气API）
+        city_weather = {
+            "北京": "晴天",
+            "上海": "多云",
+            "广州": "阵雨",
+            "深圳": "晴天",
+            "成都": "阴天",
+            "杭州": "小雨",
+            "武汉": "多云",
+            "南京": "晴天",
+            "重庆": "阴天",
+            "西安": "晴天",
+        }
+        weather = city_weather.get(city, "晴天")
+    else:
+        weather = "晴天"
+    
+    if agent_id:
         state["meal_time"] = meal_time
         state["weather"] = weather
         _save_internal_state(agent_id, state)
     
-    return f"当前是{meal_time}时间，天气{weather}，实际时间 {now.strftime('%H:%M')}"
+    weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+    return "当前时间：%s %s %s；当前餐段：%s；天气：%s" % (
+        now.strftime('%Y年%m月%d日'),
+        weekdays[now.weekday()],
+        now.strftime('%H:%M'),
+        meal_time,
+        weather,
+    )
 
 
 def _reset_preferences() -> str:
@@ -127,7 +166,11 @@ def _reset_preferences() -> str:
 
 
 def _generate_recommendation(force_recommendation: str = "") -> str:
-    """根据已收集的偏好生成餐饮推荐"""
+    """根据已收集的偏好生成餐饮推荐
+    
+    注意：此函数现在调用新的食物数据库系统，而不是使用硬编码的推荐数据。
+    为了保持向后兼容性，保留了此函数，但内部实现已改为调用 get_food_recommendations。
+    """
     agent_id = _current_agent_id.get()
     state = _get_state()
     
@@ -142,81 +185,72 @@ def _generate_recommendation(force_recommendation: str = "") -> str:
             _save_internal_state(agent_id, state)
         return force_recommendation
     
-    rec_db = {
-        "清淡": {
-            "name": "清汤面+荷包蛋",
-            "reason": f"清淡口味适合{meal_time}，养胃又舒服",
-            "details": "学校食堂的清汤面配一个荷包蛋，加点青菜，暖胃又顶饱。",
-            "price": "10-15 元",
-            "alternatives": [
-                {"name": "三明治+酸奶", "reason": "轻食搭配，清爽不腻"},
-                {"name": "鸡胸肉沙拉", "reason": "健康低卡，减脂首选"},
-            ],
-        },
-        "重口": {
-            "name": "麻辣烫/冒菜",
-            "reason": f"重口味首选，{meal_time}来一碗超满足",
-            "details": "自选菜品的麻辣烫，多放麻酱和辣椒，配米饭刚好。",
-            "price": "15-25 元",
-            "alternatives": [
-                {"name": "烤肉拌饭", "reason": "味道浓郁，分量足"},
-                {"name": "重庆小面", "reason": "麻辣过瘾，便宜管饱"},
-            ],
-        },
-        "辣": {
-            "name": "麻辣烫/串串香",
-            "reason": f"无辣不欢，{meal_time}安排上",
-            "details": "自选麻辣锅，配各种丸子和蔬菜。配冰可乐更爽。",
-            "price": "20-35 元",
-            "alternatives": [
-                {"name": "麻辣香锅", "reason": "下饭神器，口味丰富"},
-                {"name": "酸菜鱼", "reason": "酸辣开胃，鱼嫩汤鲜"},
-            ],
-        },
-        "不辣": {
-            "name": "黄焖鸡米饭",
-            "reason": f"不辣的好选择，{meal_time}吃刚刚好",
-            "details": "鸡肉嫩滑，土豆和香菇入味，汤汁拌饭绝了。",
-            "price": "15-20 元",
-            "alternatives": [
-                {"name": "番茄鸡蛋面", "reason": "酸甜可口，暖胃养胃"},
-                {"name": "盖浇饭", "reason": "选择多，性价比高"},
-            ],
-        },
-        "随意": {
-            "name": "麻辣烫",
-            "reason": f"不知道吃啥就吃麻辣烫，{meal_time}通吃",
-            "details": "自选配菜，想吃什么拿什么，口味可清淡可重口。",
-            "price": "15-25 元",
-            "alternatives": [
-                {"name": "炒饭/炒面", "reason": "快速解决，便宜管饱"},
-                {"name": "饺子/馄饨", "reason": "简单又管饱，不踩雷"},
-            ],
-        },
-    }
-    
-    rec = rec_db.get(taste, rec_db["随意"])
-    
-    lines = []
-    lines.append("好的，帮你想好了！")
-    lines.append("")
-    lines.append(f"**推荐：{rec['name']}**")
-    lines.append(f"**理由**：{rec['reason']}")
-    lines.append(f"**详情**：{rec['details']}")
-    lines.append(f"**价格**：{rec['price']}")
-    lines.append("")
-    lines.append("备选方案：")
-    for i, alt in enumerate(rec["alternatives"], 1):
-        lines.append(f"  {i}. **{alt['name']}** - {alt['reason']}")
-    lines.append("")
-    lines.append("不满意可以告诉我，我帮你想想别的～")
-    
-    if agent_id:
-        state["has_recommendation"] = True
-        _save_internal_state(agent_id, state)
-        logger.info("tool_generate_recommendation agent_id=%s taste=%s budget=%s", agent_id, taste, budget)
-    
-    return "\n".join(lines)
+    # 调用新的食物数据库系统
+    try:
+        food_manager = get_food_manager()
+        
+        # 搜索候选食物
+        candidates = food_manager.search_foods(
+            taste=taste if taste != "随意" else "",
+            budget=budget,
+            meal_time=meal_time,
+            limit=5
+        )
+        
+        if not candidates:
+            # 如果没有找到，返回默认推荐
+            return (
+                "抱歉，暂时没有找到完全符合你偏好的食物。\n\n"
+                "你可以试试：\n"
+                "1. 麻辣烫 - 不知道吃啥就吃麻辣烫，通吃\n"
+                "2. 炒饭/炒面 - 快速解决，便宜管饱\n"
+                "3. 饺子/馄饨 - 简单又管饱，不踩雷\n\n"
+                "不满意可以告诉我，我帮你想想别的～"
+            )
+        
+        # 按热度排序
+        candidates.sort(key=lambda x: x.get("popularity", 0), reverse=True)
+        
+        # 取第一个作为主推荐
+        main_food = candidates[0]
+        alternatives = candidates[1:3] if len(candidates) > 1 else []
+        
+        lines = []
+        lines.append("好的，帮你想好了！")
+        lines.append("")
+        lines.append(f"**推荐：{main_food['name']}**")
+        lines.append(f"**理由**：符合你的口味偏好，热度高")
+        lines.append(f"**价格**：{main_food.get('price_range', '未知')}")
+        if main_food.get('description'):
+            lines.append(f"**详情**：{main_food['description']}")
+        lines.append("")
+        
+        if alternatives:
+            lines.append("备选方案：")
+            for i, alt in enumerate(alternatives, 1):
+                lines.append(f"  {i}. **{alt['name']}** - {alt.get('description', '美味推荐')}")
+        
+        lines.append("")
+        lines.append("不满意可以告诉我，我帮你想想别的～")
+        
+        if agent_id:
+            state["has_recommendation"] = True
+            _save_internal_state(agent_id, state)
+            logger.info("tool_generate_recommendation agent_id=%s taste=%s budget=%s", agent_id, taste, budget)
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error("generate_recommendation_failed error=%s", e)
+        # 降级到默认推荐
+        return (
+            "抱歉，推荐系统暂时出现问题。\n\n"
+            "你可以试试：\n"
+            "1. 麻辣烫 - 不知道吃啥就吃麻辣烫，通吃\n"
+            "2. 炒饭/炒面 - 快速解决，便宜管饱\n"
+            "3. 饺子/馄饨 - 简单又管饱，不踩雷\n\n"
+            "不满意可以告诉我，我帮你想想别的～"
+        )
 
 
 # ============================================================
@@ -255,6 +289,30 @@ class SessionStateManager:
 # LangChain Tool 包装
 # ============================================================
 
+@tool("save_location")
+def save_location(city: str, school: str) -> str:
+    """保存用户的位置信息（城市和学校/校区）。这是推荐的前提条件，必须在推荐前获取。
+    
+    Args:
+        city: 城市名称（如"北京"、"上海"）
+        school: 学校名称和校区（如"清华大学"、"北京大学东门校区"）
+    
+    Returns:
+        确认信息
+    """
+    agent_id = _current_agent_id.get()
+    if not agent_id:
+        return "警告：未关联 agent"
+    
+    state = _get_state()
+    state["city"] = city
+    state["school"] = school
+    _save_internal_state(agent_id, state)
+    logger.info("tool_save_location agent_id=%s city=%s school=%s", agent_id, city, school)
+    
+    return f"已记录位置信息：{city}，{school}"
+
+
 @tool("save_preference")
 def save_preference(key: str, value: str) -> str:
     """保存用户的偏好信息。当你从用户那里收集到某个偏好时调用。"""
@@ -285,12 +343,269 @@ def generate_recommendation(force_recommendation: str = "") -> str:
     return _generate_recommendation(force_recommendation)
 
 
+# ============================================================
+# 食物数据库相关工具
+# ============================================================
+
+@tool("search_food_database")
+def search_food_database(
+    taste: str = "",
+    budget: str = "",
+    meal_time: str = "",
+    category: str = "",
+    limit: int = 10
+) -> str:
+    """搜索本地食物数据库，根据口味、预算、用餐时间等条件筛选食物选项。
+    
+    Args:
+        taste: 口味偏好（辣/清淡/重口/不辣等）
+        budget: 预算范围（如 "10-30元"）
+        meal_time: 用餐时间（早餐/午餐/晚餐/夜宵）
+        category: 食物类别（快餐/小吃/正餐等）
+        limit: 返回结果数量，默认10个
+    
+    Returns:
+        JSON 格式的食物列表，包含名称、价格、推荐理由等信息
+    """
+    try:
+        food_manager = get_food_manager()
+        results = food_manager.search_foods(
+            taste=taste,
+            budget=budget,
+            meal_time=meal_time,
+            category=category,
+            limit=limit
+        )
+        
+        if not results:
+            return json.dumps({
+                "success": False,
+                "message": "没有找到符合条件的食物",
+                "results": []
+            }, ensure_ascii=False)
+        
+        # 格式化结果
+        formatted_results = []
+        for food in results:
+            formatted_results.append({
+                "name": food["name"],
+                "category": food.get("category", ""),
+                "price_range": food.get("price_range", ""),
+                "description": food.get("description", ""),
+                "popularity": food.get("popularity", 0),
+                "tags": food.get("tags", [])
+            })
+        
+        return json.dumps({
+            "success": True,
+            "count": len(formatted_results),
+            "results": formatted_results
+        }, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error("search_food_database_failed error=%s", e)
+        return json.dumps({
+            "success": False,
+            "message": f"搜索失败: {str(e)}",
+            "results": []
+        }, ensure_ascii=False)
+
+
+@tool("get_food_recommendations")
+def get_food_recommendations(
+    preferences: str,
+    count: int = 3
+) -> str:
+    """基于用户偏好生成个性化食物推荐。结合数据库搜索和算法排序。
+    
+    Args:
+        preferences: 用户偏好摘要（如 "口味：辣，预算：20-30元，时间：午餐"）
+        count: 推荐数量，默认3个
+    
+    Returns:
+        结构化的推荐结果，包含主要推荐和备选方案
+    """
+    try:
+        food_manager = get_food_manager()
+        
+        # 解析用户偏好
+        taste = ""
+        budget = ""
+        meal_time = ""
+        
+        if "口味" in preferences:
+            parts = preferences.split("口味")
+            if len(parts) > 1:
+                taste_part = parts[1].split("，")[0].split("。")[0]
+                taste = taste_part.strip().replace("：", "").replace(":", "")
+        
+        if "预算" in preferences:
+            parts = preferences.split("预算")
+            if len(parts) > 1:
+                budget_part = parts[1].split("，")[0].split("。")[0]
+                budget = budget_part.strip().replace("：", "").replace(":", "")
+        
+        if "时间" in preferences or "餐" in preferences:
+            for keyword in ["时间", "餐"]:
+                if keyword in preferences:
+                    parts = preferences.split(keyword)
+                    if len(parts) > 1:
+                        meal_part = parts[1].split("，")[0].split("。")[0]
+                        meal_time = meal_part.strip().replace("：", "").replace(":", "")
+                        break
+        
+        # 搜索候选食物
+        candidates = food_manager.search_foods(
+            taste=taste,
+            budget=budget,
+            meal_time=meal_time,
+            limit=count * 2
+        )
+        
+        if not candidates:
+            return json.dumps({
+                "success": False,
+                "message": "没有找到合适的食物推荐",
+                "recommendations": []
+            }, ensure_ascii=False)
+        
+        # 按热度排序
+        candidates.sort(key=lambda x: x.get("popularity", 0), reverse=True)
+        
+        # 取前 N 个
+        top_foods = candidates[:count]
+        
+        # 格式化推荐结果
+        recommendations = []
+        for i, food in enumerate(top_foods):
+            recommendations.append({
+                "rank": i + 1,
+                "name": food["name"],
+                "reason": f"符合你的口味偏好，热度高",
+                "price_range": food.get("price_range", ""),
+                "description": food.get("description", ""),
+                "confidence": min(95, 70 + food.get("popularity", 0) // 10)
+            })
+        
+        return json.dumps({
+            "success": True,
+            "count": len(recommendations),
+            "recommendations": recommendations,
+            "summary": f"根据你的偏好，推荐了 {len(recommendations)} 个选择"
+        }, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error("get_food_recommendations_failed error=%s", e)
+        return json.dumps({
+            "success": False,
+            "message": f"推荐失败: {str(e)}",
+            "recommendations": []
+        }, ensure_ascii=False)
+
+
+@tool("update_food_database")
+def update_food_database(
+    force_update: bool = False
+) -> str:
+    """更新食物数据库。检查是否有新数据可用并更新本地缓存。
+    
+    Args:
+        force_update: 是否强制更新（忽略时间检查）
+    
+    Returns:
+        更新状态信息，包括更新时间和数据量
+    """
+    try:
+        food_manager = get_food_manager()
+        
+        # 检查是否需要更新
+        if not force_update and not food_manager.should_update():
+            return json.dumps({
+                "success": True,
+                "message": "数据库已是最新状态",
+                "last_update": food_manager._last_update.isoformat() if food_manager._last_update else None,
+                "food_count": len(food_manager.load_database())
+            }, ensure_ascii=False)
+        
+        # 保存数据库（触发更新）
+        food_manager.save_database()
+        
+        return json.dumps({
+            "success": True,
+            "message": "数据库更新完成",
+            "last_update": datetime.now().isoformat(),
+            "food_count": len(food_manager.load_database())
+        }, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error("update_food_database_failed error=%s", e)
+        return json.dumps({
+            "success": False,
+            "message": f"更新失败: {str(e)}",
+            "last_update": None,
+            "food_count": 0
+        }, ensure_ascii=False)
+
+
+@tool("get_trending_foods")
+def get_trending_foods(limit: int = 10) -> str:
+    """获取当前热门食物排行榜。
+    
+    Args:
+        limit: 返回数量，默认10个
+    
+    Returns:
+        按热度排序的食物列表
+    """
+    try:
+        food_manager = get_food_manager()
+        trending = food_manager.get_trending_foods(limit=limit)
+        
+        if not trending:
+            return json.dumps({
+                "success": False,
+                "message": "暂无热门食物数据",
+                "foods": []
+            }, ensure_ascii=False)
+        
+        foods = []
+        for i, food in enumerate(trending):
+            foods.append({
+                "rank": i + 1,
+                "name": food["name"],
+                "category": food.get("category", ""),
+                "price_range": food.get("price_range", ""),
+                "popularity": food.get("popularity", 0),
+                "tags": food.get("tags", [])
+            })
+        
+        return json.dumps({
+            "success": True,
+            "count": len(foods),
+            "foods": foods
+        }, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error("get_trending_foods_failed error=%s", e)
+        return json.dumps({
+            "success": False,
+            "message": f"获取热门食物失败: {str(e)}",
+            "foods": []
+        }, ensure_ascii=False)
+
+
 def get_all_tools():
     """获取所有工具列表"""
     return [
+        save_location,
         save_preference,
         get_preferences,
         get_context_info,
         reset_preferences,
         generate_recommendation,
+        # 新增食物数据库相关工具
+        search_food_database,
+        get_food_recommendations,
+        update_food_database,
+        get_trending_foods,
     ]

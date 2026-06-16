@@ -7,6 +7,12 @@ python-dotenv>=1.0.0
 pydantic>=2.0.0
 requests>=2.31.0
 
+# 爬虫依赖
+beautifulsoup4>=4.12.0
+
+# 定时任务依赖
+apscheduler>=3.10.0
+
 # 测试依赖
 pytest>=7.0.0
 pytest-cov>=4.0.0

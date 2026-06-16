@@ -1,6 +1,7 @@
 """Agent 定义 - 基于 LangChain Tool Calling Agent"""
 
 from typing import Dict, List, Optional, Any
+from datetime import datetime
 
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
@@ -19,18 +20,29 @@ SYSTEM_PROMPT = """你是一个专门为中国大学生推荐餐饮的 AI 助手
 ## 你的角色
 学生不知道吃什么的时候，你来帮忙推荐。你要像朋友一样跟 ta 聊天，不要像在做问卷调查。
 
-## 你的工作流程
-1. 先了解用户的口味、预算、时间等基本需求
-2. 根据这些信息给出推荐（1 个主推荐 + 2 个备选）
-3. 推荐后继续互动，看用户是否满意
+## 你的核心能力
+你有一个**本地食物数据库**，包含 75+ 种常见中式食物。
 
-## 规则
-- 每次只问一个问题，不要太啰嗦
-- 用户如果说了推荐需要的全部信息（口味 + 预算），就可以推荐
-- 如果用户已经拿到推荐结果，但说想换一个或再看看，可以展示备选方案或重新推荐
-- 语气轻松友好，像朋友聊天一样
-- 用户说"重新开始"时，先调用 reset_preferences 工具再重新走流程
-- 对话开始时先调用 get_context_info 了解当前时间段和天气"""
+## 重要工具
+- `search_food_database`：搜索食物数据库获取推荐
+- `get_food_recommendations`：生成个性化推荐
+- `get_trending_foods`：获取热门排行榜
+- `save_preference`：保存用户偏好
+- `get_preferences`：查看用户偏好
+- `reset_preferences`：重置偏好
+
+## 位置信息收集
+**必须主动询问用户所在城市和学校（具体校区）**。这是推荐的前提条件，因为：
+1. 不同城市的美食差异很大
+2. 不同学校/校区的周边餐饮环境不同
+3. 没有位置信息，推荐会不准确
+
+在对话开始时，你应该主动询问：“你在哪里呀？在哪个城市，哪个学校（校区）？” 
+如果用户没有提供位置信息，不要进行推荐，而是先询问位置。
+
+## 时间日期回答
+系统会在每次对话时提供当前时间上下文。用户问日期、星期、现在几点时，直接自然回答即可，例如“今天是 6 月 16 日，星期二”。不要说“我已收到系统提示”或暴露内部上下文。
+"""
 
 # 对话历史最大长度（防止内存无限增长）
 MAX_CHAT_HISTORY = 50
@@ -57,6 +69,19 @@ class MealRecommenderAgent:
         self._session = None
         
         self._initialize()
+    
+    def _get_current_time_context(self) -> str:
+        """生成当前时间上下文，供模型回答日期时间问题。"""
+        now = datetime.now()
+        weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+        return "当前时间：%s年%s月%s日 %s %s:%s" % (
+            now.year,
+            str(now.month).zfill(2),
+            str(now.day).zfill(2),
+            weekdays[now.weekday()],
+            str(now.hour).zfill(2),
+            str(now.minute).zfill(2),
+        )
     
     def _initialize(self):
         """初始化 Agent"""
@@ -103,7 +128,12 @@ class MealRecommenderAgent:
         
         try:
             # create_agent (langchain >=1.3) 要求 messages 为字典格式: {"role": "...", "content": "..."}
-            input_messages = []
+            input_messages = [
+                {
+                    "role": "system",
+                    "content": "%s。用户问日期、星期或时间时，请基于这个上下文自然回答，不要提到系统提示。" % self._get_current_time_context(),
+                }
+            ]
             for msg in self._chat_history:
                 if msg.type == "human":
                     input_messages.append({"role": "user", "content": msg.content})
@@ -162,9 +192,24 @@ class MealRecommenderAgent:
         return messages
     
     def __del__(self):
-        """清理 session state"""
+        """清理 session state
+        
+        注意：Python 的 __del__ 方法不保证被调用，且调用顺序不可控。
+        对于当前项目（单 worker 模式），这不是大问题。
+        生产环境建议使用上下文管理器（with 语句）确保资源释放。
+        """
         if self._session:
             self._session.cleanup()
+    
+    def __enter__(self):
+        """上下文管理器入口"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器出口，确保资源释放"""
+        if self._session:
+            self._session.cleanup()
+        return False  # 不抑制异常
     
     def _get_fallback_response(self, user_message: str) -> str:
         """无 API 时的回退响应"""

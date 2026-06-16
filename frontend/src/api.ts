@@ -15,6 +15,35 @@ export interface HealthResponse {
   active_sessions: number
 }
 
+export interface FoodItem {
+  rank: number
+  name: string
+  category: string
+  price_range: string
+  popularity: number
+  tags: string[]
+  description?: string
+}
+
+export interface FoodRankingsResponse {
+  success: boolean
+  count: number
+  foods: FoodItem[]
+}
+
+export interface SearchFoodResponse {
+  success: boolean
+  count: number
+  results: FoodItem[]
+}
+
+export interface FoodStatsResponse {
+  total_foods: number
+  categories: Record<string, number>
+  last_update: string | null
+  should_update: boolean
+}
+
 let currentSessionId: string | null = null
 
 /**
@@ -53,6 +82,38 @@ export async function resetSession(): Promise<ChatResponse> {
  */
 export async function healthCheck(): Promise<HealthResponse> {
   const res = await axios.get<HealthResponse>(`${API_BASE}/api/health`)
+  return res.data
+}
+
+/**
+ * 获取热门食物排行榜
+ */
+export async function getFoodRankings(limit: number = 10): Promise<FoodRankingsResponse> {
+  const res = await axios.get<FoodRankingsResponse>(`${API_BASE}/api/food_rankings`, {
+    params: { limit }
+  })
+  return res.data
+}
+
+/**
+ * 搜索食物
+ */
+export async function searchFood(params: {
+  taste?: string
+  budget?: string
+  meal_time?: string
+  category?: string
+  limit?: number
+}): Promise<SearchFoodResponse> {
+  const res = await axios.post<SearchFoodResponse>(`${API_BASE}/api/search_food`, params)
+  return res.data
+}
+
+/**
+ * 获取食物数据库统计
+ */
+export async function getFoodStats(): Promise<FoodStatsResponse> {
+  const res = await axios.get<FoodStatsResponse>(`${API_BASE}/api/food_stats`)
   return res.data
 }
 
