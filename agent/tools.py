@@ -594,6 +594,237 @@ def get_trending_foods(limit: int = 10) -> str:
         }, ensure_ascii=False)
 
 
+@tool("web_search_restaurant")
+def web_search_restaurant(
+    query: str,
+    location: str = "",
+    max_results: int = 5
+) -> str:
+    """使用搜狗搜索餐厅推荐和美食信息。
+    
+    Args:
+        query: 搜索关键词（如 "麻辣烫"、"火锅"、"学校附近快餐"）
+        location: 位置信息（如 "北京"、"五道口"），可选
+        max_results: 返回结果数量，默认5个
+    
+    Returns:
+        搜索结果列表，包含标题、链接、摘要
+    """
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        
+        # 构建搜索查询
+        search_query = query
+        if location:
+            search_query = f"{location} {query} 推荐"
+        else:
+            search_query = f"{query} 推荐 好吃"
+        
+        logger.info("web_search_restaurant query=%s location=%s", query, location)
+        
+        # 使用搜狗搜索
+        url = "https://www.sogou.com/web"
+        params = {"query": search_query}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        # 解析搜索结果
+        results = soup.find_all("div", class_="vrwrap") or soup.find_all("div", class_="rb")
+        
+        if not results:
+            # 尝试提取 h3 标签
+            h3_tags = soup.find_all("h3")
+            if h3_tags:
+                formatted_results = []
+                for i, h3 in enumerate(h3_tags[:max_results]):
+                    title = h3.get_text().strip()
+                    link = ""
+                    parent = h3.find_parent("a")
+                    if parent:
+                        link = parent.get("href", "")
+                    formatted_results.append({
+                        "rank": i + 1,
+                        "title": title,
+                        "link": link,
+                        "snippet": ""
+                    })
+                
+                if formatted_results:
+                    return json.dumps({
+                        "success": True,
+                        "query": search_query,
+                        "count": len(formatted_results),
+                        "results": formatted_results
+                    }, ensure_ascii=False)
+            
+            return json.dumps({
+                "success": False,
+                "message": "未找到相关搜索结果",
+                "results": []
+            }, ensure_ascii=False)
+        
+        # 格式化结果
+        formatted_results = []
+        for i, result in enumerate(results[:max_results]):
+            title_elem = result.find("h3")
+            title = title_elem.get_text().strip() if title_elem else ""
+            
+            link = ""
+            if title_elem:
+                parent = title_elem.find_parent("a")
+                if parent:
+                    link = parent.get("href", "")
+            
+            snippet = ""
+            snippet_elem = result.find("p", class_="str_info") or result.find("div", class_="space-txt")
+            if snippet_elem:
+                snippet = snippet_elem.get_text().strip()[:200]
+            
+            formatted_results.append({
+                "rank": i + 1,
+                "title": title,
+                "link": link,
+                "snippet": snippet
+            })
+        
+        return json.dumps({
+            "success": True,
+            "query": search_query,
+            "count": len(formatted_results),
+            "results": formatted_results
+        }, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error("web_search_restaurant_failed error=%s", e)
+        return json.dumps({
+            "success": False,
+            "message": f"搜索失败: {str(e)}",
+            "results": []
+        }, ensure_ascii=False)
+
+
+@tool("search_food_review")
+def search_food_review(
+    food_name: str,
+    restaurant: str = "",
+    max_results: int = 3
+) -> str:
+    """搜索特定食物或餐厅的评价和推荐。
+    
+    Args:
+        food_name: 食物名称（如 "麻辣烫"、"珍珠奶茶"）
+        restaurant: 餐厅名称，可选
+        max_results: 返回结果数量，默认3个
+    
+    Returns:
+        评价和推荐列表
+    """
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        
+        # 构建搜索查询
+        search_query = food_name
+        if restaurant:
+            search_query = f"{restaurant} {food_name}"
+        search_query += " 推荐 评价 好吃 怎么样"
+        
+        logger.info("search_food_review food=%s restaurant=%s", food_name, restaurant)
+        
+        # 使用搜狗搜索
+        url = "https://www.sogou.com/web"
+        params = {"query": search_query}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        # 解析搜索结果
+        results = soup.find_all("div", class_="vrwrap") or soup.find_all("div", class_="rb")
+        
+        if not results:
+            # 尝试提取 h3 标签
+            h3_tags = soup.find_all("h3")
+            if h3_tags:
+                formatted_results = []
+                for i, h3 in enumerate(h3_tags[:max_results]):
+                    title = h3.get_text().strip()
+                    link = ""
+                    parent = h3.find_parent("a")
+                    if parent:
+                        link = parent.get("href", "")
+                    formatted_results.append({
+                        "rank": i + 1,
+                        "title": title,
+                        "link": link,
+                        "snippet": ""
+                    })
+                
+                if formatted_results:
+                    return json.dumps({
+                        "success": True,
+                        "food": food_name,
+                        "count": len(formatted_results),
+                        "results": formatted_results
+                    }, ensure_ascii=False)
+            
+            return json.dumps({
+                "success": False,
+                "message": "未找到相关评价",
+                "results": []
+            }, ensure_ascii=False)
+        
+        # 格式化结果
+        formatted_results = []
+        for i, result in enumerate(results[:max_results]):
+            title_elem = result.find("h3")
+            title = title_elem.get_text().strip() if title_elem else ""
+            
+            link = ""
+            if title_elem:
+                parent = title_elem.find_parent("a")
+                if parent:
+                    link = parent.get("href", "")
+            
+            snippet = ""
+            snippet_elem = result.find("p", class_="str_info") or result.find("div", class_="space-txt")
+            if snippet_elem:
+                snippet = snippet_elem.get_text().strip()[:200]
+            
+            formatted_results.append({
+                "rank": i + 1,
+                "title": title,
+                "link": link,
+                "snippet": snippet
+            })
+        
+        return json.dumps({
+            "success": True,
+            "food": food_name,
+            "count": len(formatted_results),
+            "results": formatted_results
+        }, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error("search_food_review_failed error=%s", e)
+        return json.dumps({
+            "success": False,
+            "message": f"搜索失败: {str(e)}",
+            "results": []
+        }, ensure_ascii=False)
+
+
 def get_all_tools():
     """获取所有工具列表"""
     return [
@@ -603,9 +834,12 @@ def get_all_tools():
         get_context_info,
         reset_preferences,
         generate_recommendation,
-        # 新增食物数据库相关工具
+        # 食物数据库相关工具
         search_food_database,
         get_food_recommendations,
         update_food_database,
         get_trending_foods,
+        # 网络搜索工具
+        web_search_restaurant,
+        search_food_review,
     ]
